@@ -401,6 +401,98 @@ improve precision but create more false negatives. The analysis will
 show why the best threshold depends on the real-world purpose of the
 model.</p>
 </div>
+<div id="data-loading-and-validation" class="section level1">
+<h1>Data Loading and Validation</h1>
+<p>The original CSV was downloaded from the course GitHub repository and
+stored as a fixed file in my public GitHub repository. The code reads
+this copy through its GitHub Raw URL, allowing the analysis to run
+without using a local file path.</p>
+<p>During data validation, I found that the assignment description
+presents the predicted classes as 1 and 0, but the actual CSV stores
+<code>.pred_class</code> and <code>sex</code> as the text labels
+<code>female</code> and <code>male</code>. For the analysis, I will
+convert female to 1 and male to 0, consistently treating female as the
+positive class.</p>
+<pre class="r"><code>data_url &lt;- paste0(
+  &quot;https://raw.githubusercontent.com/&quot;,
+  &quot;howtwo388-cyber/DATA607-Week2B-Classification-Metrics/&quot;,
+  &quot;main/data/penguin_predictions.csv&quot;
+)
+
+penguins_raw &lt;- readr::read_csv(
+  data_url,
+  show_col_types = FALSE
+)
+
+dim(penguins_raw)</code></pre>
+<pre><code>## [1] 93  3</code></pre>
+<pre class="r"><code>names(penguins_raw)</code></pre>
+<pre><code>## [1] &quot;.pred_female&quot; &quot;.pred_class&quot;  &quot;sex&quot;</code></pre>
+<pre class="r"><code>dplyr::glimpse(penguins_raw)</code></pre>
+<pre><code>## Rows: 93
+## Columns: 3
+## $ .pred_female &lt;dbl&gt; 0.99217462, 0.95423945, 0.98473504, 0.18702056, 0.9947012…
+## $ .pred_class  &lt;chr&gt; &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;male&quot;, &quot;female&quot;, &quot;female&quot;,…
+## $ sex          &lt;chr&gt; &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;female…</code></pre>
+<p>The following code checks the dataset and converts the character
+labels into binary values.</p>
+<pre class="r"><code>data_validation &lt;- tibble::tibble(
+  number_of_rows = nrow(penguins_raw),
+  number_of_columns = ncol(penguins_raw),
+  missing_values = sum(is.na(penguins_raw)),
+  minimum_probability = min(
+    penguins_raw$.pred_female,
+    na.rm = TRUE
+  ),
+  maximum_probability = max(
+    penguins_raw$.pred_female,
+    na.rm = TRUE
+  )
+)
+
+class_distribution &lt;- penguins_raw |&gt;
+  dplyr::count(sex, name = &quot;observations&quot;)
+
+penguins_clean &lt;- penguins_raw |&gt;
+  dplyr::mutate(
+    actual_class = dplyr::if_else(
+      sex == &quot;female&quot;,
+      1L,
+      0L
+    ),
+    original_predicted_class = dplyr::if_else(
+      .pred_class == &quot;female&quot;,
+      1L,
+      0L
+    ),
+    predicted_class_from_probability = dplyr::if_else(
+      .pred_female &gt; 0.5,
+      1L,
+      0L
+    )
+  )
+
+data_validation</code></pre>
+<pre><code>## # A tibble: 1 × 5
+##   number_of_rows number_of_columns missing_values minimum_probability
+##            &lt;int&gt;             &lt;int&gt;          &lt;int&gt;               &lt;dbl&gt;
+## 1             93                 3              0            5.60e-12
+## # ℹ 1 more variable: maximum_probability &lt;dbl&gt;</code></pre>
+<pre class="r"><code>class_distribution</code></pre>
+<pre><code>## # A tibble: 2 × 2
+##   sex    observations
+##   &lt;chr&gt;         &lt;int&gt;
+## 1 female           39
+## 2 male             54</code></pre>
+<pre class="r"><code>dplyr::glimpse(penguins_clean)</code></pre>
+<pre><code>## Rows: 93
+## Columns: 6
+## $ .pred_female                     &lt;dbl&gt; 0.99217462, 0.95423945, 0.98473504, 0…
+## $ .pred_class                      &lt;chr&gt; &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;male&quot;,…
+## $ sex                              &lt;chr&gt; &quot;female&quot;, &quot;female&quot;, &quot;female&quot;, &quot;female…
+## $ actual_class                     &lt;int&gt; 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1, 1…
+## $ original_predicted_class         &lt;int&gt; 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1…
+## $ predicted_class_from_probability &lt;int&gt; 1, 1, 1, 0, 1, 1, 1, 1, 1, 0, 1, 1, 1…</code></pre>
 <div id="ai-use" class="section level2">
 <h2>AI Use</h2>
 <p>OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. <a href="https://chat.openai.com/" class="uri">https://chat.openai.com/</a>. Accessed September 10,
@@ -409,6 +501,7 @@ model.</p>
 organize the planned approach, improve the English writing, and provide
 coding guidance. I will run the code, review the results, and make sure
 that I understand the analysis.</p>
+</div>
 </div>
 
 

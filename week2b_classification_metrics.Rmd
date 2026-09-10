@@ -29,6 +29,76 @@ Another challenge is that some metric formulas can produce undefined results whe
 
 I expect a lower threshold to classify more observations as female, increasing recall but potentially creating more false positives. A higher threshold should classify fewer observations as female, which may improve precision but create more false negatives. The analysis will show why the best threshold depends on the real-world purpose of the model.
 
+# Data Loading and Validation
+
+The original CSV was downloaded from the course GitHub repository and stored as a fixed file in my public GitHub repository. The code reads this copy through its GitHub Raw URL, allowing the analysis to run without using a local file path.
+
+During data validation, I found that the assignment description presents the predicted classes as 1 and 0, but the actual CSV stores `.pred_class` and `sex` as the text labels `female` and `male`. For the analysis, I will convert female to 1 and male to 0, consistently treating female as the positive class.
+
+```{r data-loading}
+data_url <- paste0(
+  "https://raw.githubusercontent.com/",
+  "howtwo388-cyber/DATA607-Week2B-Classification-Metrics/",
+  "main/data/penguin_predictions.csv"
+)
+
+penguins_raw <- readr::read_csv(
+  data_url,
+  show_col_types = FALSE
+)
+
+dim(penguins_raw)
+names(penguins_raw)
+dplyr::glimpse(penguins_raw)
+```
+
+The following code checks the dataset and converts the character labels into binary values.
+
+```{r data-validation}
+data_validation <- tibble::tibble(
+  number_of_rows = nrow(penguins_raw),
+  number_of_columns = ncol(penguins_raw),
+  missing_values = sum(is.na(penguins_raw)),
+  minimum_probability = min(
+    penguins_raw$.pred_female,
+    na.rm = TRUE
+  ),
+  maximum_probability = max(
+    penguins_raw$.pred_female,
+    na.rm = TRUE
+  )
+)
+
+class_distribution <- penguins_raw |>
+  dplyr::count(sex, name = "observations")
+
+penguins_clean <- penguins_raw |>
+  dplyr::mutate(
+    actual_class = dplyr::if_else(
+      sex == "female",
+      1L,
+      0L
+    ),
+    original_predicted_class = dplyr::if_else(
+      .pred_class == "female",
+      1L,
+      0L
+    ),
+    predicted_class_from_probability = dplyr::if_else(
+      .pred_female > 0.5,
+      1L,
+      0L
+    )
+  )
+
+data_validation
+class_distribution
+
+dplyr::glimpse(penguins_clean)
+```
+
+
+
 ## AI Use
 
 OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. https://chat.openai.com/. Accessed September 10, 2026.

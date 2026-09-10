@@ -1,0 +1,36 @@
+---
+title: 'Week 2B Assignment: Classification Metrics'
+author: "Patricio Romero"
+date: "2026-09-10"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## Introduction
+
+For this assignment, I will analyze the performance of a binary classification model using the penguin_predictions.csv dataset provided in the course materials. The dataset contains the predicted probability that each penguin is female, the predicted class, and the actual sex. My goal is to understand how changing the probability threshold affects the model's predictions and performance.
+
+## Planned Approach
+
+I will first load the dataset from its public GitHub URL and review its structure and class distribution. I will calculate the null error rate to establish a baseline for evaluating the model. I will then use probability thresholds of 0.2, 0.5, and 0.8 to generate predicted classes and calculate true positives, false positives, true negatives, and false negatives.
+
+For each threshold, I will calculate accuracy, precision, recall, and F1 score. I will present the results using confusion matrices, a comparison table, and simple visualizations. Finally, I will explain the tradeoff between identifying more positive cases and avoiding false positive predictions.
+
+## Anticipated Data Challenges
+
+I anticipate that the sex variable may need to be converted into numeric class labels before it can be compared with the predicted probabilities. I will also check for missing or invalid values before calculating the metrics.
+
+Another challenge is that some metric formulas can produce undefined results when their denominator is zero. I will include checks for this possibility. I will carefully define “female” as the positive class and use the same definition throughout the analysis.
+
+## Expected Outcome
+
+I expect a lower threshold to classify more observations as female, increasing recall but potentially creating more false positives. A higher threshold should classify fewer observations as female, which may improve precision but create more false negatives. The analysis will show why the best threshold depends on the real-world purpose of the model.
+
+## AI Use
+
+OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. https://chat.openai.com/. Accessed September 10, 2026.
+
+ChatGPT was used to help interpret the assignment requirements, organize the planned approach, improve the English writing, and provide coding guidance. I will run the code, review the results, and make sure that I understand the analysis.

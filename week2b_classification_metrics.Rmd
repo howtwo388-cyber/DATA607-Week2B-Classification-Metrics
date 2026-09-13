@@ -1,5 +1,5 @@
 ---
-title: 'Week 2B Assignment: Classification Metrics'
+title: "Week 2B Assignment: Classification Metrics"
 author: "Patricio Romero"
 date: "2026-09-10"
 output: html_document
@@ -29,7 +29,7 @@ Another challenge is that some metric formulas can produce undefined results whe
 
 I expect a lower threshold to classify more observations as female, increasing recall but potentially creating more false positives. A higher threshold should classify fewer observations as female, which may improve precision but create more false negatives. The analysis will show why the best threshold depends on the real-world purpose of the model.
 
-# Data Loading and Validation
+## Data Loading and Validation
 
 The original CSV was downloaded from the course GitHub repository and stored as a fixed file in my public GitHub repository. The code reads this copy through its GitHub Raw URL, allowing the analysis to run without using a local file path.
 
@@ -97,10 +97,571 @@ class_distribution
 dplyr::glimpse(penguins_clean)
 ```
 
+## Class Distribution and Null Error Rate
 
+The actual classes are not perfectly balanced. The null model always predicts the majority class. This provides a baseline for evaluating whether the classification model performs better than a simple majority-class prediction.
+
+```{r null-error-rate}
+class_counts <- table(penguins_clean$sex)
+
+total_observations <- sum(class_counts)
+majority_class <- names(which.max(class_counts))
+majority_count <- max(class_counts)
+
+null_accuracy <- majority_count / total_observations
+null_error_rate <- 1 - null_accuracy
+
+null_model_summary <- tibble::tibble(
+  total_observations = total_observations,
+  majority_class = majority_class,
+  majority_count = majority_count,
+  null_accuracy = round(null_accuracy, 4),
+  null_error_rate = round(null_error_rate, 4)
+)
+
+knitr::kable(
+  null_model_summary,
+  caption = "Null Model Performance"
+)
+```
+
+The majority class is male, with 54 of the 93 observations. A model that always predicts male would have an accuracy of approximately 58.1% and an error rate of approximately 41.9%. The classification model should perform better than this baseline.
+
+```{r class-distribution-plot, fig.width=8, fig.height=5}
+class_distribution_plot <- class_distribution |>
+  dplyr::mutate(
+    sex = factor(
+      sex,
+      levels = c("male", "female"),
+      labels = c("Male", "Female")
+    ),
+    percentage = observations / sum(observations),
+    bar_label = paste0(
+      observations,
+      " observations\n(",
+      round(percentage * 100, 1),
+      "%)"
+    )
+  )
+
+ggplot2::ggplot(
+  class_distribution_plot,
+  ggplot2::aes(
+    x = sex,
+    y = observations,
+    fill = sex
+  )
+) +
+  ggplot2::geom_col(
+    width = 0.62,
+    color = "white",
+    linewidth = 0.8
+  ) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = bar_label),
+    vjust = 1.5,
+    color = "white",
+    fontface = "bold",
+    size = 4.2,
+    lineheight = 1.1
+  ) +
+  ggplot2::scale_fill_manual(
+    values = c(
+      "Male" = "#0072B2",
+      "Female" = "#CC79A7"
+    )
+  ) +
+  ggplot2::scale_y_continuous(
+    limits = c(0, 60),
+    breaks = seq(0, 60, 10),
+    expand = c(0, 0)
+  ) +
+  ggplot2::labs(
+    title = "Actual Class Distribution",
+    subtitle = paste(
+      "Male is the majority class;",
+      "the null model always predicts Male"
+    ),
+    x = NULL,
+    y = "Number of observations",
+    caption = "Dataset: penguin_predictions.csv | Total observations: 93"
+  ) +
+  ggplot2::theme_minimal(base_size = 13) +
+  ggplot2::theme(
+    legend.position = "none",
+    plot.title = ggplot2::element_text(
+      face = "bold",
+      size = 17
+    ),
+    plot.subtitle = ggplot2::element_text(
+      color = "#555555",
+      margin = ggplot2::margin(b = 12)
+    ),
+    plot.caption = ggplot2::element_text(
+      color = "#666666",
+      hjust = 0
+    ),
+    axis.text.x = ggplot2::element_text(
+      face = "bold",
+      size = 12
+    ),
+    panel.grid.major.x = ggplot2::element_blank(),
+    panel.grid.minor = ggplot2::element_blank(),
+    plot.margin = ggplot2::margin(15, 20, 10, 15)
+  )
+```
+
+## Predictions at Different Thresholds
+
+I evaluated probability thresholds of 0.2, 0.5, and 0.8. An observation is classified as female when its predicted female probability is greater than the selected threshold. Female is consistently treated as the positive class.
+
+A lower threshold produces more female predictions, while a higher threshold requires stronger evidence before predicting female.
+
+```{r threshold-predictions}
+penguins_thresholds <- penguins_clean |>
+  dplyr::mutate(
+    predicted_02 = dplyr::if_else(
+      .pred_female > 0.2,
+      1L,
+      0L
+    ),
+    predicted_05 = dplyr::if_else(
+      .pred_female > 0.5,
+      1L,
+      0L
+    ),
+    predicted_08 = dplyr::if_else(
+      .pred_female > 0.8,
+      1L,
+      0L
+    )
+  )
+
+prediction_counts <- tibble::tibble(
+  threshold = c(0.2, 0.5, 0.8),
+  predicted_female = c(
+    sum(penguins_thresholds$predicted_02 == 1),
+    sum(penguins_thresholds$predicted_05 == 1),
+    sum(penguins_thresholds$predicted_08 == 1)
+  ),
+  predicted_male = c(
+    sum(penguins_thresholds$predicted_02 == 0),
+    sum(penguins_thresholds$predicted_05 == 0),
+    sum(penguins_thresholds$predicted_08 == 0)
+  )
+)
+
+knitr::kable(
+  prediction_counts,
+  digits = 1,
+  caption = "Number of Predicted Classes at Each Threshold"
+)
+```
+
+## Confusion Matrices
+
+The rows in each matrix represent the actual class, and the columns represent the predicted class.
+
+- True positive: actual female predicted as female.
+- False positive: actual male predicted as female.
+- True negative: actual male predicted as male.
+- False negative: actual female predicted as male.
+
+```{r confusion-matrix-function}
+create_confusion_matrix <- function(actual, predicted) {
+  actual_labels <- factor(
+    ifelse(actual == 1, "Female", "Male"),
+    levels = c("Female", "Male")
+  )
+
+  predicted_labels <- factor(
+    ifelse(predicted == 1, "Female", "Male"),
+    levels = c("Female", "Male")
+  )
+
+  table(
+    "Actual Class" = actual_labels,
+    "Predicted Class" = predicted_labels
+  )
+}
+
+confusion_02 <- create_confusion_matrix(
+  penguins_thresholds$actual_class,
+  penguins_thresholds$predicted_02
+)
+
+confusion_05 <- create_confusion_matrix(
+  penguins_thresholds$actual_class,
+  penguins_thresholds$predicted_05
+)
+
+confusion_08 <- create_confusion_matrix(
+  penguins_thresholds$actual_class,
+  penguins_thresholds$predicted_08
+)
+```
+
+## Threshold 0.2
+
+```{r confusion-matrix-02}
+knitr::kable(
+  confusion_02,
+  caption = "Confusion Matrix for Threshold 0.2"
+)
+```
+
+## Threshold 0.5
+
+```{r confusion-matrix-05}
+knitr::kable(
+  confusion_05,
+  caption = "Confusion Matrix for Threshold 0.5"
+)
+```
+
+## Threshold 0.8
+
+```{r confusion-matrix-08}
+knitr::kable(
+  confusion_08,
+  caption = "Confusion Matrix for Threshold 0.8"
+)
+```
+
+## Classification Metrics
+
+For this analysis, **female is the positive class (1)** and **male is the negative class (0)**. The four components of the confusion matrix are defined as follows:
+
+- **True Positive (TP):** The penguin is actually female, and the model correctly predicts female.
+- **True Negative (TN):** The penguin is actually male, and the model correctly predicts male.
+- **False Positive (FP):** The penguin is actually male, but the model incorrectly predicts female.
+- **False Negative (FN):** The penguin is actually female, but the model incorrectly predicts male.
+
+These four values are used to calculate the classification metrics:
+
+- **Accuracy** measures the proportion of all observations that were classified correctly.
+
+$$Accuracy = \frac{TP + TN}{TP + TN + FP + FN}$$
+
+- **Precision** measures the proportion of female predictions that were actually female.
+
+$$Precision = \frac{TP}{TP + FP}$$
+
+- **Recall** measures the proportion of actual female observations that the model correctly identified.
+
+$$Recall = \frac{TP}{TP + FN}$$
+
+- **F1 score** combines precision and recall into one measurement. A higher F1 score indicates a better balance between these two metrics.
+
+$$F1 = 2 \times \frac{Precision \times Recall}{Precision + Recall}$$
+
+```{r calculate-classification-metrics}
+safe_divide <- function(numerator, denominator) {
+  if (is.na(denominator) || denominator == 0) {
+    return(NA_real_)
+  }
+
+  numerator / denominator
+}
+
+calculate_metrics <- function(data, threshold) {
+  actual <- data$actual_class
+
+  predicted <- ifelse(
+    data$.pred_female > threshold,
+    1L,
+    0L
+  )
+
+  true_positive <- sum(
+    actual == 1 & predicted == 1
+  )
+
+  false_positive <- sum(
+    actual == 0 & predicted == 1
+  )
+
+  true_negative <- sum(
+    actual == 0 & predicted == 0
+  )
+
+  false_negative <- sum(
+    actual == 1 & predicted == 0
+  )
+
+  accuracy_value <- safe_divide(
+    true_positive + true_negative,
+    true_positive + false_positive +
+      true_negative + false_negative
+  )
+
+  precision_value <- safe_divide(
+    true_positive,
+    true_positive + false_positive
+  )
+
+  recall_value <- safe_divide(
+    true_positive,
+    true_positive + false_negative
+  )
+
+  if (
+    is.na(precision_value) ||
+    is.na(recall_value) ||
+    precision_value + recall_value == 0
+  ) {
+    f1_value <- NA_real_
+  } else {
+    f1_value <- 2 * (
+      precision_value * recall_value
+    ) / (
+      precision_value + recall_value
+    )
+  }
+
+  tibble::tibble(
+    threshold = threshold,
+    TP = true_positive,
+    FP = false_positive,
+    TN = true_negative,
+    FN = false_negative,
+    accuracy = accuracy_value,
+    precision = precision_value,
+    recall = recall_value,
+    F1_score = f1_value
+  )
+}
+
+metrics_by_threshold <- dplyr::bind_rows(
+  calculate_metrics(penguins_clean, 0.2),
+  calculate_metrics(penguins_clean, 0.5),
+  calculate_metrics(penguins_clean, 0.8)
+)
+
+metrics_by_threshold
+```
+
+## Metrics Comparison
+
+The following table compares the confusion-matrix counts and performance metrics for the three thresholds.
+
+```{r metrics-comparison-table}
+metrics_display <- metrics_by_threshold |>
+  dplyr::mutate(
+    accuracy = paste0(
+      round(accuracy * 100, 1),
+      "%"
+    ),
+    precision = paste0(
+      round(precision * 100, 1),
+      "%"
+    ),
+    recall = paste0(
+      round(recall * 100, 1),
+      "%"
+    ),
+    F1_score = paste0(
+      round(F1_score * 100, 1),
+      "%"
+    )
+  ) |>
+  dplyr::rename(
+    Threshold = threshold,
+    Accuracy = accuracy,
+    Precision = precision,
+    Recall = recall,
+    `F1 Score` = F1_score
+  )
+
+knitr::kable(
+  metrics_display,
+  align = "c",
+  caption = paste(
+    "Classification Performance",
+    "at Each Probability Threshold"
+  )
+)
+```
+
+## Visual Comparison of Classification Metrics
+
+The following graph shows how accuracy, precision, recall, and F1 score change when the probability threshold increases. Each panel represents one performance metric.
+
+```{r metrics-comparison-plot, fig.width=9, fig.height=7}
+metrics_long <- dplyr::bind_rows(
+  metrics_by_threshold |>
+    dplyr::transmute(
+      threshold,
+      metric = "Accuracy",
+      value = accuracy
+    ),
+  metrics_by_threshold |>
+    dplyr::transmute(
+      threshold,
+      metric = "Precision",
+      value = precision
+    ),
+  metrics_by_threshold |>
+    dplyr::transmute(
+      threshold,
+      metric = "Recall",
+      value = recall
+    ),
+  metrics_by_threshold |>
+    dplyr::transmute(
+      threshold,
+      metric = "F1 Score",
+      value = F1_score
+    )
+) |>
+  dplyr::mutate(
+    metric = factor(
+      metric,
+      levels = c(
+        "Accuracy",
+        "Precision",
+        "Recall",
+        "F1 Score"
+      )
+    ),
+    percentage_label = paste0(
+      round(value * 100, 1),
+      "%"
+    )
+  )
+
+ggplot2::ggplot(
+  metrics_long,
+  ggplot2::aes(
+    x = threshold,
+    y = value,
+    color = metric,
+    group = metric
+  )
+) +
+  ggplot2::geom_line(
+    linewidth = 1.2
+  ) +
+  ggplot2::geom_point(
+    size = 3.5
+  ) +
+  ggplot2::geom_text(
+    ggplot2::aes(label = percentage_label),
+    vjust = -0.8,
+    fontface = "bold",
+    size = 3.8,
+    show.legend = FALSE
+  ) +
+  ggplot2::facet_wrap(
+    ~metric,
+    ncol = 2
+  ) +
+  ggplot2::scale_color_manual(
+    values = c(
+      "Accuracy" = "#0072B2",
+      "Precision" = "#009E73",
+      "Recall" = "#D55E00",
+      "F1 Score" = "#CC79A7"
+    )
+  ) +
+  ggplot2::scale_x_continuous(
+    breaks = c(0.2, 0.5, 0.8),
+    limits = c(0.15, 0.85)
+  ) +
+  ggplot2::scale_y_continuous(
+    limits = c(0, 1.08),
+    breaks = seq(0, 1, 0.2),
+    labels = function(x) {
+      paste0(round(x * 100), "%")
+    }
+  ) +
+  ggplot2::labs(
+    title = "Classification Performance by Probability Threshold",
+    subtitle = paste(
+      "Female is treated as the positive class;",
+      "higher values indicate better performance"
+    ),
+    x = "Probability threshold",
+    y = "Metric value",
+    caption = "Dataset: penguin_predictions.csv"
+  ) +
+  ggplot2::theme_minimal(base_size = 12) +
+  ggplot2::theme(
+    legend.position = "none",
+    plot.title = ggplot2::element_text(
+      face = "bold",
+      size = 16
+    ),
+    plot.subtitle = ggplot2::element_text(
+      color = "#555555",
+      margin = ggplot2::margin(b = 12)
+    ),
+    strip.text = ggplot2::element_text(
+      face = "bold",
+      size = 12
+    ),
+    panel.grid.minor = ggplot2::element_blank(),
+    plot.caption = ggplot2::element_text(
+      color = "#666666",
+      hjust = 0
+    )
+  )
+```
+
+## Interpretation of Results
+
+### Threshold 0.2
+
+At the 0.2 threshold, the model had 37 true positives, 6 false positives, 48 true negatives, and 2 false negatives.
+
+This threshold had the highest recall, at 94.9%. It correctly found 37 of the 39 female penguins. However, it also incorrectly classified six male penguins as female. Because of these false positives, precision was lower, at 86.0%.
+
+The accuracy was 91.4%, and the F1 score was 90.2%. This threshold may be useful when finding as many cases as possible is the main goal.
+
+### Threshold 0.5
+
+At the 0.5 threshold, the model had 36 true positives, 3 false positives, 51 true negatives, and 3 false negatives.
+
+The accuracy was 93.5%. Precision, recall, and F1 score were all 92.3%. These results show a good balance between finding female penguins and avoiding incorrect female predictions.
+
+This threshold may be useful when false positives and false negatives are equally important.
+
+### Threshold 0.8
+
+At the 0.8 threshold, the model had 36 true positives, 2 false positives, 52 true negatives, and 3 false negatives.
+
+This threshold had the highest accuracy, at 94.6%. It also had the highest precision, at 94.7%, and the highest F1 score, at 93.5%. Recall was 92.3%, which was the same as the recall at the 0.5 threshold.
+
+Increasing the threshold from 0.5 to 0.8 removed one false positive without adding another false negative. For this dataset, the 0.8 threshold had the best results among the three thresholds tested.
+
+## Choosing a Threshold in Real-World Situations
+
+The best threshold depends on the purpose of the model and the cost of each type of error.
+
+A lower threshold may be useful for medical screening. In this situation, finding as many possible cases as possible may be more important than avoiding false positives. Some healthy people may need more tests, but fewer people with a possible disease will be missed.
+
+A higher threshold may be useful when a positive prediction leads to an expensive action or an investigation. A higher threshold can reduce false positives and unnecessary costs. However, it may also miss some true positive cases.
+
+A middle threshold may be useful when false positives and false negatives are equally important. It can provide a good balance between precision and recall.
+
+Therefore, a threshold should be selected by looking at the model’s results and the effects of its errors.
+
+## Conclusion
+
+Changing the probability threshold changed the predictions and the performance of the model.
+
+The 0.2 threshold made more female predictions and had the highest recall. However, it also had the largest number of false positives and the lowest precision.
+
+The 0.5 threshold provided a good balance between precision and recall. The 0.8 threshold had the highest accuracy, precision, and F1 score. It also had the same recall as the 0.5 threshold.
+
+Among the three thresholds tested, 0.8 had the best results for this dataset. However, this does not mean that 0.8 will always be the best threshold for other classification problems.
+
+All three thresholds had accuracy values much higher than the null-model accuracy of 58.1%. This shows that the classification model performed much better than a model that always predicts the majority class.
+
+The results also show that accuracy alone is not enough to evaluate a classification model. Precision, recall, F1 score, false positives, and false negatives should also be considered when choosing a probability threshold.
 
 ## AI Use
 
-OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. https://chat.openai.com/. Accessed September 10, 2026.
+OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. <https://chat.openai.com/>. Accessed September 12, 2026.
 
-ChatGPT was used to help interpret the assignment requirements, organize the planned approach, improve the English writing, and provide coding guidance. I will run the code, review the results, and make sure that I understand the analysis.
+ChatGPT was used to help interpret the assignment requirements, organize the planned approach, improve the English writing, and provide coding guidance. I ran the code, reviewed the results, and confirmed that I understood the analysis.

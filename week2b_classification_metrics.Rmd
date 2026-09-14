@@ -660,6 +660,12 @@ All three thresholds had accuracy values much higher than the null-model accurac
 
 The results also show that accuracy alone is not enough to evaluate a classification model. Precision, recall, F1 score, false positives, and false negatives should also be considered when choosing a probability threshold.
 
+## Video Explainer
+
+My Week 2A video presentation is available here:
+
+[Watch the DATA 607 Week 2A Video Explainer](https://youtu.be/CX8djwpKEk8)
+
 ## AI Use
 
 OpenAI. (2026). ChatGPT (GPT-5) [Large language model]. <https://chat.openai.com/>. Accessed September 12, 2026.

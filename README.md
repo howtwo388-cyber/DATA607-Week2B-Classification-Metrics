@@ -69,6 +69,13 @@ The best threshold still depends on the purpose of the model and the consequence
 
 The R Markdown file reads the CSV through its GitHub Raw URL, so the analysis does not depend on a private local file path.
 
+## Video Explainer
+
+Include this sentence and link:
+
+Watch the Week 2B video presentation here:
+https://youtu.be/xrnHd3pk5Os
+
 ## Conclusion
 
 All three thresholds performed substantially better than the null-model accuracy of 58.1%. For this dataset, the 0.8 threshold produced the best overall results among the thresholds tested.

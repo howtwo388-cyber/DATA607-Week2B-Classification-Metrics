@@ -662,9 +662,9 @@ The results also show that accuracy alone is not enough to evaluate a classifica
 
 ## Video Explainer
 
-My Week 2A video presentation is available here:
+My Week 2B video presentation is available here:
 
-[Watch the DATA 607 Week 2A Video Explainer](https://youtu.be/CX8djwpKEk8)
+[Watch the DATA 607 Week 2B Video Explainer](https://youtu.be/xrnHd3pk5Os)
 
 ## AI Use
 
